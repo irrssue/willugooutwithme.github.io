@@ -11,6 +11,35 @@ const placesList = document.querySelector(".places-list");
 let selectedPlacesList = [];
 let availablePlaces = [];
 
+function isMobile() {
+  return window.innerWidth <= 768;
+}
+
+// Add a place to the plan area at a default position
+function addPlaceToPlan(placeName) {
+  const rect = selectedPlaces.getBoundingClientRect();
+  const count = selectedPlacesList.length;
+
+  // Stagger positions so they don't overlap
+  const x = 20 + (count % 3) * 120;
+  const y = 20 + Math.floor(count / 3) * 80;
+
+  selectedPlacesList.push({
+    name: placeName,
+    x: Math.min(x, rect.width - 150),
+    y: Math.min(y, rect.height - 60),
+    time: { hour: "08", minute: "00" }
+  });
+
+  const placeInList = availablePlaces.find(p => p.name === placeName);
+  if (placeInList) {
+    placeInList.used = true;
+  }
+
+  updatePlacesList();
+  updateSelectedPlaces();
+}
+
 yesBtn.addEventListener("click", () => {
   question.innerHTML = "yayyyy letsss gooo :3";
   gif.src = "https://media.giphy.com/media/UMon0fuimoAN9ueUNP/giphy.gif";
@@ -69,10 +98,11 @@ function updatePlacesList() {
   }
 
   // Create place items
+  const mobile = isMobile();
+
   availablePlaces.forEach((place) => {
     const placeItem = document.createElement("div");
     placeItem.className = "place-item";
-    placeItem.draggable = true;
     placeItem.setAttribute("data-place", place.name);
     placeItem.textContent = place.name;
 
@@ -81,36 +111,59 @@ function updatePlacesList() {
       placeItem.classList.add("used");
     }
 
-    let isDragging = false;
+    if (mobile) {
+      // Mobile: disable drag, use double-tap to add to plan
+      placeItem.draggable = false;
 
-    // Add drag functionality
-    placeItem.addEventListener("dragstart", (e) => {
-      if (placeItem.classList.contains("used")) {
-        e.preventDefault();
-        return;
-      }
-      isDragging = true;
-      draggedElement = placeItem;
-      isDraggingFromLeft = true;
-      placeItem.classList.add("dragging");
-    });
+      // Double-click/double-tap to add to plan area
+      placeItem.addEventListener("dblclick", () => {
+        if (!placeItem.classList.contains("used")) {
+          addPlaceToPlan(place.name);
+        }
+      });
 
-    placeItem.addEventListener("dragend", () => {
-      placeItem.classList.remove("dragging");
-      isDraggingFromLeft = false;
+      // Single click to delete from list
+      placeItem.addEventListener("click", () => {
+        if (placeItem.classList.contains("used")) return;
+        // Use a timeout to avoid firing on double-click
+        if (placeItem._clickTimer) {
+          clearTimeout(placeItem._clickTimer);
+          placeItem._clickTimer = null;
+          return;
+        }
+        placeItem._clickTimer = setTimeout(() => {
+          placeItem._clickTimer = null;
+          deletePlaceFromList(place.name);
+        }, 300);
+      });
+    } else {
+      // Desktop: drag and click behavior
+      placeItem.draggable = true;
+      let isDragging = false;
 
-      // Reset drag flag after a short delay
-      setTimeout(() => {
-        isDragging = false;
-      }, 100);
-    });
+      placeItem.addEventListener("dragstart", (e) => {
+        if (placeItem.classList.contains("used")) {
+          e.preventDefault();
+          return;
+        }
+        isDragging = true;
+        draggedElement = placeItem;
+        isDraggingFromLeft = true;
+        placeItem.classList.add("dragging");
+      });
 
-    // Click to delete from available places
-    placeItem.addEventListener("click", () => {
-      if (!isDragging) {
-        deletePlaceFromList(place.name);
-      }
-    });
+      placeItem.addEventListener("dragend", () => {
+        placeItem.classList.remove("dragging");
+        isDraggingFromLeft = false;
+        setTimeout(() => { isDragging = false; }, 100);
+      });
+
+      placeItem.addEventListener("click", () => {
+        if (!isDragging) {
+          deletePlaceFromList(place.name);
+        }
+      });
+    }
 
     placesList.appendChild(placeItem);
   });
@@ -171,7 +224,8 @@ function updateSelectedPlaces() {
   selectedPlaces.innerHTML = "";
 
   if (selectedPlacesList.length === 0) {
-    selectedPlaces.innerHTML = '<div class="drop-zone">Drag places here to plan your day</div>';
+    const msg = isMobile() ? "Double-tap places to add them here" : "Drag places here to plan your day";
+    selectedPlaces.innerHTML = '<div class="drop-zone">' + msg + '</div>';
     return;
   }
 
@@ -233,29 +287,25 @@ function updateSelectedPlaces() {
       let startY = 0;
       let currentValue = 0;
       let isDraggingTime = false;
+      let lastValue = 0;
 
-      element.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      function startDrag(clientY) {
         isDraggingTime = true;
-        startY = e.clientY;
+        startY = clientY;
         currentValue = parseInt(type === "hour" ? place.time.hour : place.time.minute);
+        lastValue = currentValue;
         element.classList.add("time-dragging");
-        wrapper.draggable = false; // Disable wrapper drag while adjusting time
-      });
+        wrapper.draggable = false;
+      }
 
-      let lastValue = currentValue;
-
-      document.addEventListener("mousemove", (e) => {
+      function moveDrag(clientY) {
         if (!isDraggingTime) return;
-
-        const deltaY = startY - e.clientY;
-        const steps = Math.floor(deltaY / 10); // Every 10px of drag = 1 unit change
-
+        const deltaY = startY - clientY;
+        const steps = Math.floor(deltaY / 10);
         let newValue = currentValue + steps;
 
         if (type === "hour") {
-          newValue = (newValue + 24) % 24; // Wrap around 0-23
+          newValue = (newValue + 24) % 24;
           if (newValue !== lastValue) {
             element.classList.add("flip-animation");
             setTimeout(() => element.classList.remove("flip-animation"), 200);
@@ -264,7 +314,7 @@ function updateSelectedPlaces() {
           place.time.hour = newValue.toString().padStart(2, "0");
           element.textContent = place.time.hour;
         } else {
-          newValue = (newValue + 60) % 60; // Wrap around 0-59
+          newValue = (newValue + 60) % 60;
           if (newValue !== lastValue) {
             element.classList.add("flip-animation");
             setTimeout(() => element.classList.remove("flip-animation"), 200);
@@ -273,15 +323,38 @@ function updateSelectedPlaces() {
           place.time.minute = newValue.toString().padStart(2, "0");
           element.textContent = place.time.minute;
         }
-      });
+      }
 
-      document.addEventListener("mouseup", () => {
+      function endDrag() {
         if (isDraggingTime) {
           isDraggingTime = false;
           element.classList.remove("time-dragging");
-          wrapper.draggable = true; // Re-enable wrapper drag
+          wrapper.draggable = true;
         }
+      }
+
+      // Mouse events
+      element.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        startDrag(e.clientY);
       });
+      document.addEventListener("mousemove", (e) => moveDrag(e.clientY));
+      document.addEventListener("mouseup", endDrag);
+
+      // Touch events
+      element.addEventListener("touchstart", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        startDrag(e.touches[0].clientY);
+      }, { passive: false });
+      document.addEventListener("touchmove", (e) => {
+        if (isDraggingTime) {
+          e.preventDefault();
+          moveDrag(e.touches[0].clientY);
+        }
+      }, { passive: false });
+      document.addEventListener("touchend", endDrag);
     }
 
     setupTimeDrag(hourSpan, "hour");
@@ -297,42 +370,88 @@ function updateSelectedPlaces() {
 
     let isDragging = false;
 
-    // Make wrapper draggable
-    wrapper.draggable = true;
-    wrapper.addEventListener("dragstart", (e) => {
-      e.stopPropagation();
-      isDragging = true;
-      isDraggingFromLeft = false;
-      wrapper.style.opacity = "0.5";
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/html", index);
-    });
+    if (isMobile()) {
+      // Mobile: touch drag for repositioning
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchStartTime = 0;
+      let hasMoved = false;
 
-    wrapper.addEventListener("dragend", (e) => {
-      wrapper.style.opacity = "1";
+      wrapper.addEventListener("touchstart", (e) => {
+        const touch = e.touches[0];
+        touchStartX = touch.clientX - place.x;
+        touchStartY = touch.clientY - place.y;
+        touchStartTime = Date.now();
+        hasMoved = false;
+        wrapper.style.opacity = "0.7";
+        wrapper.style.zIndex = "100";
+      }, { passive: true });
 
-      const rect = selectedPlaces.getBoundingClientRect();
-      const newX = e.clientX - rect.left - 60;
-      const newY = e.clientY - rect.top - 20;
+      wrapper.addEventListener("touchmove", (e) => {
+        e.preventDefault();
+        hasMoved = true;
+        const touch = e.touches[0];
+        const rect = selectedPlaces.getBoundingClientRect();
 
-      // Update position
-      selectedPlacesList[index].x = Math.max(0, Math.min(newX, rect.width - 150));
-      selectedPlacesList[index].y = Math.max(0, Math.min(newY, rect.height - 60));
+        const newX = touch.clientX - touchStartX;
+        const newY = touch.clientY - touchStartY;
 
-      updateSelectedPlaces();
+        place.x = Math.max(0, Math.min(newX, rect.width - 150));
+        place.y = Math.max(0, Math.min(newY, rect.height - 60));
 
-      // Reset drag flag after a short delay
-      setTimeout(() => {
-        isDragging = false;
-      }, 100);
-    });
+        wrapper.style.left = place.x + "px";
+        wrapper.style.top = place.y + "px";
+      }, { passive: false });
 
-    // Click to delete (but not if we're dragging)
-    placeDiv.addEventListener("click", () => {
-      if (!isDragging) {
-        removePlace(index);
-      }
-    });
+      wrapper.addEventListener("touchend", () => {
+        wrapper.style.opacity = "1";
+        wrapper.style.zIndex = "10";
+
+        // Redraw arrows after move
+        if (hasMoved) {
+          updateSelectedPlaces();
+        }
+      });
+
+      // Tap to delete (only if not dragged)
+      placeDiv.addEventListener("click", () => {
+        if (!hasMoved) {
+          removePlace(index);
+        }
+      });
+    } else {
+      // Desktop: drag behavior
+      wrapper.draggable = true;
+      wrapper.addEventListener("dragstart", (e) => {
+        e.stopPropagation();
+        isDragging = true;
+        isDraggingFromLeft = false;
+        wrapper.style.opacity = "0.5";
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/html", index);
+      });
+
+      wrapper.addEventListener("dragend", (e) => {
+        wrapper.style.opacity = "1";
+
+        const rect = selectedPlaces.getBoundingClientRect();
+        const newX = e.clientX - rect.left - 60;
+        const newY = e.clientY - rect.top - 20;
+
+        selectedPlacesList[index].x = Math.max(0, Math.min(newX, rect.width - 150));
+        selectedPlacesList[index].y = Math.max(0, Math.min(newY, rect.height - 60));
+
+        updateSelectedPlaces();
+        setTimeout(() => { isDragging = false; }, 100);
+      });
+
+      // Click to delete (but not if we're dragging)
+      placeDiv.addEventListener("click", () => {
+        if (!isDragging) {
+          removePlace(index);
+        }
+      });
+    }
 
     selectedPlaces.appendChild(wrapper);
     placeElements.push(placeDiv);
