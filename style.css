@@ -141,8 +141,10 @@ button:nth-child(2) {
 }
 
 .place-item:hover {
+    background: #ffcccc;
     transform: scale(1.02);
     box-shadow: 0 2px 8px rgba(233, 77, 88, 0.3);
+    cursor: pointer;
 }
 
 .place-item.dragging {

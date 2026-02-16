@@ -81,12 +81,15 @@ function updatePlacesList() {
       placeItem.classList.add("used");
     }
 
+    let isDragging = false;
+
     // Add drag functionality
     placeItem.addEventListener("dragstart", (e) => {
       if (placeItem.classList.contains("used")) {
         e.preventDefault();
         return;
       }
+      isDragging = true;
       draggedElement = placeItem;
       isDraggingFromLeft = true;
       placeItem.classList.add("dragging");
@@ -95,10 +98,30 @@ function updatePlacesList() {
     placeItem.addEventListener("dragend", () => {
       placeItem.classList.remove("dragging");
       isDraggingFromLeft = false;
+
+      // Reset drag flag after a short delay
+      setTimeout(() => {
+        isDragging = false;
+      }, 100);
+    });
+
+    // Click to delete from available places
+    placeItem.addEventListener("click", () => {
+      if (!isDragging) {
+        deletePlaceFromList(place.name);
+      }
     });
 
     placesList.appendChild(placeItem);
   });
+}
+
+function deletePlaceFromList(placeName) {
+  // Remove from available places
+  availablePlaces = availablePlaces.filter(p => p.name !== placeName);
+
+  // Update display
+  updatePlacesList();
 }
 
 // Drag and Drop functionality
