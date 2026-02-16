@@ -144,11 +144,12 @@ selectedPlaces.addEventListener("drop", (e) => {
     const x = e.clientX - rect.left - 60; // Offset to center the element
     const y = e.clientY - rect.top - 20;
 
-    // Add to selected list with position
+    // Add to selected list with position and default time
     selectedPlacesList.push({
       name: placeName,
       x: Math.max(0, Math.min(x, rect.width - 150)),
-      y: Math.max(0, Math.min(y, rect.height - 60))
+      y: Math.max(0, Math.min(y, rect.height - 60)),
+      time: { hour: "08", minute: "00" }
     });
 
     // Mark as used in availablePlaces array
@@ -201,30 +202,114 @@ function updateSelectedPlaces() {
 
   // Create elements for each selected place at their saved positions
   selectedPlacesList.forEach((place, index) => {
+    // Create wrapper to hold both place and time
+    const wrapper = document.createElement("div");
+    wrapper.className = "place-time-wrapper";
+    wrapper.style.position = "absolute";
+    wrapper.style.top = place.y + "px";
+    wrapper.style.left = place.x + "px";
+
+    // Create place div
     const placeDiv = document.createElement("div");
     placeDiv.className = "selected-place";
     placeDiv.setAttribute("data-index", index);
     placeDiv.innerHTML = `<span>${place.name}</span>`;
 
-    // Use saved position
-    placeDiv.style.top = place.y + "px";
-    placeDiv.style.left = place.x + "px";
+    // Create time div
+    const timeDiv = document.createElement("div");
+    timeDiv.className = "time-container";
+    timeDiv.innerHTML = `
+      <span class="time-hour">${place.time.hour}</span>
+      <span class="time-separator">:</span>
+      <span class="time-minute">${place.time.minute}</span>
+    `;
+
+    // Handle time editing with drag
+    const hourSpan = timeDiv.querySelector(".time-hour");
+    const minuteSpan = timeDiv.querySelector(".time-minute");
+
+    // iOS-style drag to change time
+    function setupTimeDrag(element, type) {
+      let startY = 0;
+      let currentValue = 0;
+      let isDraggingTime = false;
+
+      element.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        isDraggingTime = true;
+        startY = e.clientY;
+        currentValue = parseInt(type === "hour" ? place.time.hour : place.time.minute);
+        element.classList.add("time-dragging");
+        wrapper.draggable = false; // Disable wrapper drag while adjusting time
+      });
+
+      let lastValue = currentValue;
+
+      document.addEventListener("mousemove", (e) => {
+        if (!isDraggingTime) return;
+
+        const deltaY = startY - e.clientY;
+        const steps = Math.floor(deltaY / 10); // Every 10px of drag = 1 unit change
+
+        let newValue = currentValue + steps;
+
+        if (type === "hour") {
+          newValue = (newValue + 24) % 24; // Wrap around 0-23
+          if (newValue !== lastValue) {
+            element.classList.add("flip-animation");
+            setTimeout(() => element.classList.remove("flip-animation"), 200);
+            lastValue = newValue;
+          }
+          place.time.hour = newValue.toString().padStart(2, "0");
+          element.textContent = place.time.hour;
+        } else {
+          newValue = (newValue + 60) % 60; // Wrap around 0-59
+          if (newValue !== lastValue) {
+            element.classList.add("flip-animation");
+            setTimeout(() => element.classList.remove("flip-animation"), 200);
+            lastValue = newValue;
+          }
+          place.time.minute = newValue.toString().padStart(2, "0");
+          element.textContent = place.time.minute;
+        }
+      });
+
+      document.addEventListener("mouseup", () => {
+        if (isDraggingTime) {
+          isDraggingTime = false;
+          element.classList.remove("time-dragging");
+          wrapper.draggable = true; // Re-enable wrapper drag
+        }
+      });
+    }
+
+    setupTimeDrag(hourSpan, "hour");
+    setupTimeDrag(minuteSpan, "minute");
+
+    // Prevent deletion when clicking on time
+    timeDiv.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    wrapper.appendChild(placeDiv);
+    wrapper.appendChild(timeDiv);
 
     let isDragging = false;
 
-    // Make draggable within the right panel
-    placeDiv.draggable = true;
-    placeDiv.addEventListener("dragstart", (e) => {
+    // Make wrapper draggable
+    wrapper.draggable = true;
+    wrapper.addEventListener("dragstart", (e) => {
       e.stopPropagation();
       isDragging = true;
-      isDraggingFromLeft = false; // This is a reposition, not adding a new place
-      placeDiv.style.opacity = "0.5";
+      isDraggingFromLeft = false;
+      wrapper.style.opacity = "0.5";
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/html", index);
     });
 
-    placeDiv.addEventListener("dragend", (e) => {
-      placeDiv.style.opacity = "1";
+    wrapper.addEventListener("dragend", (e) => {
+      wrapper.style.opacity = "1";
 
       const rect = selectedPlaces.getBoundingClientRect();
       const newX = e.clientX - rect.left - 60;
@@ -249,7 +334,7 @@ function updateSelectedPlaces() {
       }
     });
 
-    selectedPlaces.appendChild(placeDiv);
+    selectedPlaces.appendChild(wrapper);
     placeElements.push(placeDiv);
   });
 
@@ -303,3 +388,55 @@ function removePlace(index) {
 
 // Make removePlace available globally
 window.removePlace = removePlace;
+
+// Download ICS file
+const downloadBtn = document.querySelector(".continue-btn");
+downloadBtn.addEventListener("click", () => {
+  if (selectedPlacesList.length === 0) {
+    alert("Add some places to your itinerary first!");
+    return;
+  }
+
+  const today = new Date();
+  const dateStr = today.getFullYear().toString() +
+    (today.getMonth() + 1).toString().padStart(2, "0") +
+    today.getDate().toString().padStart(2, "0");
+
+  let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//DatePlanner//EN\r\n";
+
+  // Sort places by time before generating events
+  const sorted = [...selectedPlacesList].sort((a, b) => {
+    const timeA = parseInt(a.time.hour) * 60 + parseInt(a.time.minute);
+    const timeB = parseInt(b.time.hour) * 60 + parseInt(b.time.minute);
+    return timeA - timeB;
+  });
+
+  sorted.forEach((place, i) => {
+    const startTime = dateStr + "T" + place.time.hour + place.time.minute + "00";
+
+    // End time: next place's time, or 1 hour after start
+    let endTime;
+    if (i < sorted.length - 1) {
+      endTime = dateStr + "T" + sorted[i + 1].time.hour + sorted[i + 1].time.minute + "00";
+    } else {
+      const endHour = (parseInt(place.time.hour) + 1) % 24;
+      endTime = dateStr + "T" + endHour.toString().padStart(2, "0") + place.time.minute + "00";
+    }
+
+    icsContent += "BEGIN:VEVENT\r\n";
+    icsContent += "DTSTART:" + startTime + "\r\n";
+    icsContent += "DTEND:" + endTime + "\r\n";
+    icsContent += "SUMMARY:" + place.name + "\r\n";
+    icsContent += "END:VEVENT\r\n";
+  });
+
+  icsContent += "END:VCALENDAR\r\n";
+
+  // Download the file
+  const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "date-itinerary.ics";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
