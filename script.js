@@ -272,17 +272,55 @@ function updateSelectedPlaces() {
     // Create time div
     const timeDiv = document.createElement("div");
     timeDiv.className = "time-container";
-    timeDiv.innerHTML = `
-      <span class="time-hour">${place.time.hour}</span>
-      <span class="time-separator">:</span>
-      <span class="time-minute">${place.time.minute}</span>
-    `;
 
-    // Handle time editing with drag
-    const hourSpan = timeDiv.querySelector(".time-hour");
-    const minuteSpan = timeDiv.querySelector(".time-minute");
+    if (isMobile()) {
+      timeDiv.innerHTML = `
+        <input class="time-input time-hour-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="${place.time.hour}" />
+        <span class="time-separator">:</span>
+        <input class="time-input time-minute-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="2" value="${place.time.minute}" />
+      `;
 
-    // iOS-style drag to change time
+      const hourInput = timeDiv.querySelector(".time-hour-input");
+      const minuteInput = timeDiv.querySelector(".time-minute-input");
+
+      function handleTimeInput(input, type) {
+        input.addEventListener("focus", () => {
+          input.select();
+        });
+
+        input.addEventListener("blur", () => {
+          let val = parseInt(input.value) || 0;
+          if (type === "hour") {
+            val = Math.min(23, Math.max(0, val));
+            place.time.hour = val.toString().padStart(2, "0");
+            input.value = place.time.hour;
+          } else {
+            val = Math.min(59, Math.max(0, val));
+            place.time.minute = val.toString().padStart(2, "0");
+            input.value = place.time.minute;
+          }
+        });
+
+        input.addEventListener("click", (e) => {
+          e.stopPropagation();
+        });
+
+        input.addEventListener("touchstart", (e) => {
+          e.stopPropagation();
+        }, { passive: true });
+      }
+
+      handleTimeInput(hourInput, "hour");
+      handleTimeInput(minuteInput, "minute");
+    } else {
+      timeDiv.innerHTML = `
+        <span class="time-hour">${place.time.hour}</span>
+        <span class="time-separator">:</span>
+        <span class="time-minute">${place.time.minute}</span>
+      `;
+    }
+
+    // iOS-style drag to change time (desktop only)
     function setupTimeDrag(element, type) {
       let startY = 0;
       let currentValue = 0;
@@ -357,8 +395,12 @@ function updateSelectedPlaces() {
       document.addEventListener("touchend", endDrag);
     }
 
-    setupTimeDrag(hourSpan, "hour");
-    setupTimeDrag(minuteSpan, "minute");
+    if (!isMobile()) {
+      const hourSpan = timeDiv.querySelector(".time-hour");
+      const minuteSpan = timeDiv.querySelector(".time-minute");
+      setupTimeDrag(hourSpan, "hour");
+      setupTimeDrag(minuteSpan, "minute");
+    }
 
     // Prevent deletion when clicking on time
     timeDiv.addEventListener("click", (e) => {
@@ -374,7 +416,6 @@ function updateSelectedPlaces() {
       // Mobile: touch drag for repositioning
       let touchStartX = 0;
       let touchStartY = 0;
-      let touchStartTime = 0;
       let hasMoved = false;
 
       wrapper.addEventListener("touchstart", (e) => {

@@ -304,6 +304,23 @@ h2 {
     marker-end: url(#arrowhead);
 }
 
+.time-input {
+    width: 30px;
+    text-align: center;
+    border: none;
+    outline: none;
+    font-size: 1em;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    background: transparent;
+    padding: 3px 2px;
+    border-radius: 3px;
+}
+
+.time-input:focus {
+    background: #e0e0e0;
+}
+
 /* Mobile view */
 @media (max-width: 768px) {
     .places-container {
