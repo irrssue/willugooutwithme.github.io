@@ -181,19 +181,19 @@ function updateSelectedPlaces() {
     const placeDiv = document.createElement("div");
     placeDiv.className = "selected-place";
     placeDiv.setAttribute("data-index", index);
-    placeDiv.innerHTML = `
-      <span>${place.name}</span>
-      <button class="remove-btn" onclick="removePlace(${index})">✕</button>
-    `;
+    placeDiv.innerHTML = `<span>${place.name}</span>`;
 
     // Use saved position
     placeDiv.style.top = place.y + "px";
     placeDiv.style.left = place.x + "px";
 
+    let isDragging = false;
+
     // Make draggable within the right panel
     placeDiv.draggable = true;
     placeDiv.addEventListener("dragstart", (e) => {
       e.stopPropagation();
+      isDragging = true;
       isDraggingFromLeft = false; // This is a reposition, not adding a new place
       placeDiv.style.opacity = "0.5";
       e.dataTransfer.effectAllowed = "move";
@@ -212,6 +212,18 @@ function updateSelectedPlaces() {
       selectedPlacesList[index].y = Math.max(0, Math.min(newY, rect.height - 60));
 
       updateSelectedPlaces();
+
+      // Reset drag flag after a short delay
+      setTimeout(() => {
+        isDragging = false;
+      }, 100);
+    });
+
+    // Click to delete (but not if we're dragging)
+    placeDiv.addEventListener("click", () => {
+      if (!isDragging) {
+        removePlace(index);
+      }
     });
 
     selectedPlaces.appendChild(placeDiv);

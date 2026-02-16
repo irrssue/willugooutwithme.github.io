@@ -185,22 +185,9 @@ button:nth-child(2) {
 }
 
 .selected-place:hover {
+    background: #ffcccc;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.remove-btn {
-    margin-left: 10px;
-    background: #ff6b6b;
-    color: white;
-    border: none;
-    padding: 3px 10px;
-    border-radius: 5px;
     cursor: pointer;
-    font-size: 0.8em;
-}
-
-.remove-btn:hover {
-    background: #ff5252;
 }
 
 /* SVG Arrow styling */
