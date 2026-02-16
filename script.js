@@ -5,9 +5,11 @@ const yesBtn = document.querySelector(".yes-btn");
 const noBtn = document.querySelector(".no-btn");
 const placesContainer = document.querySelector(".places-container");
 const selectedPlaces = document.querySelector(".selected-places");
-const placeItems = document.querySelectorAll(".place-item");
+const searchBar = document.querySelector(".search-bar");
+const placesList = document.querySelector(".places-list");
 
 let selectedPlacesList = [];
+let availablePlaces = [];
 
 yesBtn.addEventListener("click", () => {
   question.innerHTML = "yayyyy letsss gooo :3";
@@ -32,23 +34,76 @@ noBtn.addEventListener("mouseover", () => {
   noBtn.style.top = randomY + "px";
 });
 
+// Search bar functionality
+searchBar.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    const placeName = searchBar.value.trim();
+    if (placeName) {
+      addPlaceToList(placeName);
+      searchBar.value = "";
+    }
+  }
+});
+
+function addPlaceToList(placeName) {
+  // Check if place already exists
+  if (availablePlaces.some(place => place.name === placeName)) {
+    alert("This place is already in your list!");
+    return;
+  }
+
+  // Add to beginning of array (descending order)
+  availablePlaces.unshift({ name: placeName });
+
+  // Update the display
+  updatePlacesList();
+}
+
+function updatePlacesList() {
+  // Clear the list
+  placesList.innerHTML = "";
+
+  if (availablePlaces.length === 0) {
+    placesList.innerHTML = '<div class="empty-message">Search for places to add to your itinerary</div>';
+    return;
+  }
+
+  // Create place items
+  availablePlaces.forEach((place) => {
+    const placeItem = document.createElement("div");
+    placeItem.className = "place-item";
+    placeItem.draggable = true;
+    placeItem.setAttribute("data-place", place.name);
+    placeItem.textContent = place.name;
+
+    // Check if this place is currently used in the itinerary
+    if (place.used) {
+      placeItem.classList.add("used");
+    }
+
+    // Add drag functionality
+    placeItem.addEventListener("dragstart", (e) => {
+      if (placeItem.classList.contains("used")) {
+        e.preventDefault();
+        return;
+      }
+      draggedElement = placeItem;
+      isDraggingFromLeft = true;
+      placeItem.classList.add("dragging");
+    });
+
+    placeItem.addEventListener("dragend", () => {
+      placeItem.classList.remove("dragging");
+      isDraggingFromLeft = false;
+    });
+
+    placesList.appendChild(placeItem);
+  });
+}
+
 // Drag and Drop functionality
 let draggedElement = null;
-
-placeItems.forEach(item => {
-  item.addEventListener("dragstart", (e) => {
-    if (item.classList.contains("used")) {
-      e.preventDefault();
-      return;
-    }
-    draggedElement = item;
-    item.classList.add("dragging");
-  });
-
-  item.addEventListener("dragend", () => {
-    item.classList.remove("dragging");
-  });
-});
+let isDraggingFromLeft = false;
 
 selectedPlaces.addEventListener("dragover", (e) => {
   e.preventDefault();
@@ -57,7 +112,8 @@ selectedPlaces.addEventListener("dragover", (e) => {
 selectedPlaces.addEventListener("drop", (e) => {
   e.preventDefault();
 
-  if (draggedElement && !draggedElement.classList.contains("used")) {
+  // Only add new place if it's being dragged from the left panel
+  if (draggedElement && isDraggingFromLeft && !draggedElement.classList.contains("used")) {
     const placeName = draggedElement.getAttribute("data-place");
 
     // Get drop position relative to the container
@@ -72,12 +128,18 @@ selectedPlaces.addEventListener("drop", (e) => {
       y: Math.max(0, Math.min(y, rect.height - 60))
     });
 
-    // Mark as used
-    draggedElement.classList.add("used");
+    // Mark as used in availablePlaces array
+    const placeInList = availablePlaces.find(p => p.name === placeName);
+    if (placeInList) {
+      placeInList.used = true;
+    }
 
-    // Update the display
+    // Update both displays
+    updatePlacesList();
     updateSelectedPlaces();
   }
+
+  isDraggingFromLeft = false;
 });
 
 function updateSelectedPlaces() {
@@ -132,6 +194,7 @@ function updateSelectedPlaces() {
     placeDiv.draggable = true;
     placeDiv.addEventListener("dragstart", (e) => {
       e.stopPropagation();
+      isDraggingFromLeft = false; // This is a reposition, not adding a new place
       placeDiv.style.opacity = "0.5";
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/html", index);
@@ -189,17 +252,17 @@ function removePlace(index) {
   const place = selectedPlacesList[index];
   const placeName = place.name;
 
-  // Remove from list
+  // Remove from selected list
   selectedPlacesList.splice(index, 1);
 
-  // Mark the item as available again
-  placeItems.forEach(item => {
-    if (item.getAttribute("data-place") === placeName) {
-      item.classList.remove("used");
-    }
-  });
+  // Mark the place as available again in availablePlaces array
+  const placeInList = availablePlaces.find(p => p.name === placeName);
+  if (placeInList) {
+    placeInList.used = false;
+  }
 
-  // Update display
+  // Update both displays
+  updatePlacesList();
   updateSelectedPlaces();
 }
 
